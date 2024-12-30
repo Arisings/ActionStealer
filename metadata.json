@@ -1,0 +1,7 @@
+{
+  "name": "ActionStealer",
+  "description": "Steals held action items on Hypixel Housing",
+  "creator": "Arisings",
+  "version": "0.0.1",
+  "entry": "index.js"
+}
