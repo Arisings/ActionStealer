@@ -35,12 +35,13 @@ register("packetReceived", (packet) => {
 
   // Actual part
   let actionItem = new ActionItem(item);
-  if (!actionItem.isValid()) return;
+  if (!actionItem.item) return
+  if (actionItem.version === 0) return; // No action data
   if (Settings.dontRecordOwned && Utils.hasItem(actionItem.getInteractData())) return;
   if (encounteredData.includes(actionItem.getInteractData())) return;
 
   const viewUUID = Utils.UUID();
-  actions[viewUUID] = () => {
+  if (actionItem.version === 1) actions[viewUUID] = () => {
     let actionData = actionItem.getActionData();
     ChatLib.chat(`§7Action Item Data: §f${JSON.stringify(actionData, null, 4)}`);
     ChatLib.command(`ct copy ${JSON.stringify(actionData)}`, true);
@@ -52,21 +53,20 @@ register("packetReceived", (packet) => {
     new Message(`${prefix} §7Added `, new Item(item).getTextComponent(), ` §7to your inventory`).chat();
   }
   const copyUUID = Utils.UUID();
-  actionItem.getJWT() && (actions[copyUUID] = () => {
+  actions[copyUUID] = () => {
     ChatLib.command(`ct copy ${JSON.stringify(new Item(item).getRawNBT())}`, true);
     ChatLib.chat(`§aCopied NBT to Clipboard!`);
-  })
+  }
 
   let alertMessage = new Message(`${prefix} §f${player.getName()} §bis holding Action Item `, new Item(item).getTextComponent(), `\n`);
   alertMessage.addTextComponent(`§aOptions: `)
-  alertMessage.addTextComponent(new TextComponent('§9[View Actions]').setClick('run_command', `/asaction ${viewUUID}`).setHoverValue('§eView the item\'s action data and copy it to your clipboard.'))
+  if (actionItem.version === 1) alertMessage.addTextComponent(new TextComponent('§9[View Actions]').setClick('run_command', `/asaction ${viewUUID}`).setHoverValue('§eView the item\'s action data and copy it to your clipboard.'))
+  if (actionItem.version === 1) alertMessage.addTextComponent(new TextComponent(` `));
+  alertMessage.addTextComponent(new TextComponent(`§${actionItem.version === 1 ? 'a' : 9}[Give Item]`).setClick('run_command', `/asaction ${giveUUID}`).setHoverValue('§eLoad the item into your held item slot. (Must be in creative mode)'))
   alertMessage.addTextComponent(new TextComponent(` `));
-  alertMessage.addTextComponent(new TextComponent('§a[Give Item]').setClick('run_command', `/asaction ${giveUUID}`).setHoverValue('§eLoad the item into your held item slot. (Must be in creative mode)'))
-  alertMessage.addTextComponent(new TextComponent(` `));
-  alertMessage.addTextComponent(new TextComponent('§6[Copy NBT]').setClick('run_command', `/asaction ${copyUUID}`).setHoverValue('§eCopy the item\'s NBT to your clipboard'))
-  alertMessage.addTextComponent(new TextComponent(`\n§7Item contains ${actionItem.getActionData().actions.length} action${actionItem.getActionData().actions.length > 1 ? 's' : ''}.`));
+  alertMessage.addTextComponent(new TextComponent(`§6[Copy NBT]`).setClick('run_command', `/asaction ${copyUUID}`).setHoverValue('§eCopy the item\'s NBT to your clipboard'))
+  if (actionItem.version === 1) alertMessage.addTextComponent(new TextComponent(`\n§8Item contains ${actionItem.getActionData().actions.length} action${actionItem.getActionData().actions.length > 1 ? 's' : ''}.`));
   alertMessage.chat();
-
   encounteredData.push(actionItem.getInteractData());
 })
 
@@ -94,7 +94,8 @@ register('command', () => {
   let actionItem = new ActionItem(Player.getHeldItem().getItemStack());
 
 
-  if (!actionItem.isValid()) return ChatLib.chat("&cThis item does not have any valid click actions!");
+  if (actionItem.version === 0) return ChatLib.chat("&cThis item does not have any action data!");
+  if (actionItem.version > 1) return ChatLib.chat("&cThis item uses Hypixel's newer action data encoding, which encrypts the data!");
 
   const actionData = actionItem.getActionData();
 
@@ -120,7 +121,8 @@ register('command', () => {
   if (Scoreboard?.getTitle()?.removeFormatting() !== "HOUSING") return ChatLib.chat("&cYou must be in Housing to use this command!");
   if (!Player.getHeldItem()) return ChatLib.chat("&cYou must be holding an item to use this command!");
   let actionItem = new ActionItem(Player.getHeldItem().getItemStack());
-  if (!actionItem.isValid()) return ChatLib.chat("&cThis item does not have any valid click actions!");
+  if (actionItem.version === 0) return ChatLib.chat("&cThis item does not have any action data!");
+  if (actionItem.version > 1) return ChatLib.chat("&cThis item uses Hypixel's newer action data encoding, which encrypts the data!");
 
   const jwt = actionItem.getJWT();
 
@@ -142,7 +144,9 @@ register('command', () => {
   ChatLib.chat(itemActions);
 }).setName("viewjsonwebtoken").setAliases(['jwt'])
 
+// Internal command
 register('command', (uuid) => {
+  if (!uuid || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(uuid)) return;
   if (!actions[uuid]) return ChatLib.chat("§cThis click action has expired or never existed!");
   actions[uuid]();
 }).setName("asaction")
